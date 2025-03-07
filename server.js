@@ -561,8 +561,14 @@ app.get('/', (req, res) => {
                 showTypingIndicator();
 
                 try {
-                    // Sử dụng domain thực tế của Vercel
-                    const apiUrl = 'https://bot-chat-ai-nine.vercel.app/api/chat';
+                    // Tự động xác định URL API dựa trên môi trường
+                    const baseUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+                        ? window.location.origin  // Sử dụng URL local
+                        : 'https://a261-113-172-167-184.ngrok-free.app'; // URL ngrok
+                    
+                    const apiUrl = `${ baseUrl } / api / chat`;
+                    console.log('Đang gọi API tại:', apiUrl);
+
                     const response = await fetch(apiUrl, {
                         method: 'POST',
                         headers: {
@@ -588,7 +594,8 @@ app.get('/', (req, res) => {
                     }
                 } catch (error) {
                     hideTypingIndicator();
-                    addMessage('Xin lỗi, không thể kết nối với server', false, new Date().toISOString());
+                    addMessage('Xin lỗi, không thể kết nối với server: ' + error.message, false, new Date().toISOString());
+                    console.error('Lỗi kết nối:', error);
                 }
             }
 
@@ -600,8 +607,14 @@ app.get('/', (req, res) => {
 
             async function loadChatHistory() {
                 try {
-                    // Sử dụng domain thực tế của Vercel
-                    const apiUrl = 'https://bot-chat-ai-nine.vercel.app/api/history/' + sessionId;
+                    // Tự động xác định URL API dựa trên môi trường
+                    const baseUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+                        ? window.location.origin  // Sử dụng URL local
+                        : 'https://a261-113-172-167-184.ngrok-free.app'; // URL ngrok
+                    
+                    const apiUrl = `${ baseUrl } / api / history / ${ sessionId }`;
+                    console.log('Đang tải lịch sử từ:', apiUrl);
+
                     const response = await fetch(apiUrl);
                     const history = await response.json();
                     history.forEach(item => {
@@ -637,7 +650,11 @@ app.get('/', (req, res) => {
 
 // Khởi động server
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`Server đang chạy tại ${process.env.BASE_URL} `);
+const HOST = '0.0.0.0'; // Lắng nghe tất cả các network interfaces
+
+app.listen(PORT, HOST, () => {
+    console.log(`Server đang chạy tại http://${HOST}:${PORT}`);
+    console.log(`Truy cập local: http://localhost:${PORT}`);
+    console.log(`Truy cập LAN: http://${require('os').networkInterfaces()['Wi-Fi']?.[1]?.address || 'Không tìm thấy'}:${PORT}`);
     initialize();
 });
