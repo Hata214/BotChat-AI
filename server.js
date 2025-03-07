@@ -561,7 +561,9 @@ app.get('/', (req, res) => {
                 showTypingIndicator();
 
                 try {
-                    const response = await fetch('/api/chat', {
+                    // Sử dụng domain thực tế của Vercel
+                    const apiUrl = 'https://bot-chat-ai-nine.vercel.app/api/chat';
+                    const response = await fetch(apiUrl, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
@@ -598,7 +600,9 @@ app.get('/', (req, res) => {
 
             async function loadChatHistory() {
                 try {
-                    const response = await fetch(\`/api/history/\${sessionId}\`);
+                    // Sử dụng domain thực tế của Vercel
+                    const apiUrl = 'https://bot-chat-ai-nine.vercel.app/api/history/' + sessionId;
+                    const response = await fetch(apiUrl);
                     const history = await response.json();
                     history.forEach(item => {
                         if (item.type === 'user') {
@@ -627,13 +631,13 @@ app.get('/', (req, res) => {
             };
         </script>
     </body>
-    </html>
+    </html >
     `);
 });
 
 // Khởi động server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`Server đang chạy tại ${process.env.BASE_URL}`);
+    console.log(`Server đang chạy tại ${process.env.BASE_URL} `);
     initialize();
 });
