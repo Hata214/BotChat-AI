@@ -9,7 +9,15 @@ require('dotenv').config();
 const app = express();
 app.use(express.json());
 app.use(express.static('public'));
-app.use(cors()); // Enable CORS for all routes
+
+// Cấu hình CORS chi tiết
+const corsOptions = {
+    origin: '*', // Cho phép tất cả các origin trong môi trường development
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type'],
+    credentials: false // Tắt credentials vì chúng ta cho phép tất cả các origin
+};
+app.use(cors(corsOptions));
 
 // Cấu hình từ .env
 const MAX_HISTORY_LENGTH = parseInt(process.env.MAX_HISTORY_LENGTH) || 50;
@@ -184,7 +192,8 @@ app.get('/api/docs', (req, res) => {
 
 // Cập nhật giao diện để thêm dark mode
 app.get('/', (req, res) => {
-    res.send(`
+    const currentUrl = req.protocol + '://' + req.get('host');
+    const htmlTemplate = `
     <!DOCTYPE html>
     <html>
     <head>
@@ -561,12 +570,7 @@ app.get('/', (req, res) => {
                 showTypingIndicator();
 
                 try {
-                    // Tự động xác định URL API dựa trên môi trường
-                    const baseUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-                        ? window.location.origin  // Sử dụng URL local
-                        : 'https://a261-113-172-167-184.ngrok-free.app'; // URL ngrok
-                    
-                    const apiUrl = `${ baseUrl } / api / chat`;
+                    const apiUrl = '/api/chat';
                     console.log('Đang gọi API tại:', apiUrl);
 
                     const response = await fetch(apiUrl, {
@@ -607,12 +611,7 @@ app.get('/', (req, res) => {
 
             async function loadChatHistory() {
                 try {
-                    // Tự động xác định URL API dựa trên môi trường
-                    const baseUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-                        ? window.location.origin  // Sử dụng URL local
-                        : 'https://a261-113-172-167-184.ngrok-free.app'; // URL ngrok
-                    
-                    const apiUrl = `${ baseUrl } / api / history / ${ sessionId }`;
+                    const apiUrl = '/api/history/' + sessionId;
                     console.log('Đang tải lịch sử từ:', apiUrl);
 
                     const response = await fetch(apiUrl);
@@ -644,13 +643,14 @@ app.get('/', (req, res) => {
             };
         </script>
     </body>
-    </html >
-    `);
+    </html>
+    `;
+    res.send(htmlTemplate);
 });
 
 // Khởi động server
 const PORT = process.env.PORT || 3000;
-const HOST = '0.0.0.0'; // Lắng nghe tất cả các network interfaces
+const HOST = '127.0.0.1'; // Thay đổi từ 0.0.0.0 sang 127.0.0.1
 
 app.listen(PORT, HOST, () => {
     console.log(`Server đang chạy tại http://${HOST}:${PORT}`);
