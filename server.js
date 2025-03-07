@@ -650,11 +650,8 @@ app.get('/', (req, res) => {
 
 // Khởi động server
 const PORT = process.env.PORT || 3000;
-const HOST = '127.0.0.1'; // Thay đổi từ 0.0.0.0 sang 127.0.0.1
 
-app.listen(PORT, HOST, () => {
-    console.log(`Server đang chạy tại http://${HOST}:${PORT}`);
-    console.log(`Truy cập local: http://localhost:${PORT}`);
-    console.log(`Truy cập LAN: http://${require('os').networkInterfaces()['Wi-Fi']?.[1]?.address || 'Không tìm thấy'}:${PORT}`);
+app.listen(PORT, () => {
+    console.log(`Server đang chạy tại port ${PORT}`);
     initialize();
 });
