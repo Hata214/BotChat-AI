@@ -1,5 +1,6 @@
 const express = require('express');
 const tf = require('@tensorflow/tfjs');
+const cors = require('cors');
 const { trainModel, textToVector } = require('./model');
 const { initializeGeminiChat, getGeminiResponse } = require('./gemini');
 const data = require('./data');
@@ -8,6 +9,7 @@ require('dotenv').config();
 const app = express();
 app.use(express.json());
 app.use(express.static('public'));
+app.use(cors()); // Enable CORS for all routes
 
 // Cấu hình từ .env
 const MAX_HISTORY_LENGTH = parseInt(process.env.MAX_HISTORY_LENGTH) || 50;
@@ -127,6 +129,57 @@ app.get('/api/history/:sessionId', (req, res) => {
     const { sessionId } = req.params;
     const history = chatHistory.get(sessionId) || [];
     res.json(history);
+});
+
+// API Documentation route
+app.get('/api/docs', (req, res) => {
+    res.json({
+        endpoints: {
+            '/api/chat': {
+                method: 'POST',
+                description: 'Send a message to the chatbot',
+                parameters: {
+                    message: 'string - The message to send',
+                    sessionId: 'string - Unique session identifier'
+                },
+                example: {
+                    request: {
+                        message: "Xin chào",
+                        sessionId: "user123"
+                    },
+                    response: {
+                        response: "Chào bạn! Tôi có thể giúp gì cho bạn?",
+                        intent: "greeting",
+                        confidence: 0.95,
+                        isGeminiResponse: false
+                    }
+                }
+            },
+            '/api/history/:sessionId': {
+                method: 'GET',
+                description: 'Get chat history for a session',
+                parameters: {
+                    sessionId: 'string - Session ID in URL parameter'
+                }
+            }
+        },
+        usage: {
+            curl: 'curl -X POST -H "Content-Type: application/json" -d \'{"message":"Xin chào","sessionId":"user123"}\' https://your-domain.vercel.app/api/chat',
+            javascript: `
+                fetch('https://your-domain.vercel.app/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: 'Xin chào',
+                        sessionId: 'user123'
+                    })
+                }).then(response => response.json())
+                  .then(data => console.log(data));
+            `
+        }
+    });
 });
 
 // Cập nhật giao diện để thêm dark mode
