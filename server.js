@@ -55,12 +55,50 @@ async function initialize() {
     }
 }
 
+// Quyết định sử dụng Gemini hay model local
+// Kiểm tra độ dài và từ khóa để xác định câu hỏi phức tạp
+function shouldUseGemini(message, intent, confidence) {
+    // Danh sách từ khóa cho các chủ đề phức tạp
+    const complexTopics = ['tại sao', 'giải thích', 'như thế nào', 'là gì', 'hình gì', 'thế nào'];
+
+    // Kiểm tra độ dài
+    if (message.length > MESSAGE_LENGTH_THRESHOLD) return true;
+
+    // Kiểm tra từ khóa phức tạp
+    if (complexTopics.some(topic => message.toLowerCase().includes(topic))) return true;
+
+    // Kiểm tra intent và confidence
+    const basicIntents = ["greeting", "goodbye", "thanks"];
+    if (basicIntents.includes(intent)) {
+        // Chỉ sử dụng model local khi confidence rất cao cho các intent cơ bản
+        return confidence < 0.95;
+    }
+
+    // Kiểm tra nếu tin nhắn chứa danh từ riêng hoặc thuật ngữ
+    const specialTerms = ['trái đất', 'mặt trời', 'mặt trăng', 'sao', 'thiên hà', 'vũ trụ', 'khí quyển'];
+    if (specialTerms.some(term => message.toLowerCase().includes(term))) return true;
+
+    return true; // Mặc định sử dụng Gemini cho các trường hợp khác
+}
+
 // API endpoint để nhận tin nhắn và trả lời
 app.post('/api/chat', async (req, res) => {
     const { message, sessionId } = req.body;
 
+    // Kiểm tra tin nhắn ping để test kết nối
+    if (message === 'ping' && sessionId === 'connection-test') {
+        return res.json({ status: 'ok' });
+    }
+
     if (!message) {
         return res.status(400).json({ error: 'Vui lòng nhập tin nhắn' });
+    }
+
+    // Kiểm tra xem model đã được khởi tạo chưa
+    if (!model || !vocabulary) {
+        return res.status(503).json({
+            error: 'Hệ thống đang khởi động, vui lòng thử lại sau vài giây'
+        });
     }
 
     try {
@@ -83,7 +121,8 @@ app.post('/api/chat', async (req, res) => {
         let useGemini = false;
 
         // Quyết định sử dụng Gemini hay model local
-        if (isGeminiAvailable && (confidence < CONFIDENCE_THRESHOLD || message.length > MESSAGE_LENGTH_THRESHOLD)) {
+        // Kiểm tra độ dài và từ khóa để xác định câu hỏi phức tạp
+        if (isGeminiAvailable && shouldUseGemini(message, intent, confidence)) {
             try {
                 if (!geminiChats.has(sessionId)) {
                     geminiChats.set(sessionId, await initializeGeminiChat());
@@ -91,14 +130,17 @@ app.post('/api/chat', async (req, res) => {
                 const geminiChat = geminiChats.get(sessionId);
                 response = await getGeminiResponse(geminiChat, message);
                 useGemini = true;
+                console.log('Sử dụng Gemini API cho câu hỏi phức tạp');
             } catch (error) {
-                console.error('Lỗi Gemini, fallback về model local:', error);
-                const responses = data.intents[intentIndex].responses;
-                response = responses[Math.floor(Math.random() * responses.length)];
+                console.error('Lỗi Gemini:', error);
+                response = "Xin lỗi, hiện tại tôi đang gặp vấn đề kết nối. Bạn có thể thử lại sau hoặc hỏi câu khác không?";
+                useGemini = false;
             }
         } else {
+            // Sử dụng model local cho các intent cơ bản
             const responses = data.intents[intentIndex].responses;
             response = responses[Math.floor(Math.random() * responses.length)];
+            console.log('Sử dụng model local cho intent:', intent);
         }
 
         // Lưu tin nhắn vào lịch sử
@@ -199,7 +241,7 @@ app.get('/', (req, res) => {
     <head>
         <title>AI Chatbot with Gemini</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
         <style>
             :root {
                 --bg-color: #f0f2f5;
@@ -210,7 +252,7 @@ app.get('/', (req, res) => {
                 --primary-dark: #1976d2;
                 --message-user-bg: #2196f3;
                 --message-user-color: #ffffff;
-                --message-bot-bg: #ffffff;
+                --message-bot-bg: #f8f9fa;
                 --message-bot-color: #333333;
                 --input-border: #dddddd;
                 --header-bg: #2196f3;
@@ -227,10 +269,10 @@ app.get('/', (req, res) => {
                 --primary-dark: #42a5f5;
                 --message-user-bg: #64b5f6;
                 --message-user-color: #ffffff;
-                --message-bot-bg: #404040;
+                --message-bot-bg: #383838;
                 --message-bot-color: #ffffff;
                 --input-border: #404040;
-                --header-bg: #404040;
+                --header-bg: #383838;
                 --header-color: #ffffff;
                 --typing-bg: #404040;
             }
@@ -249,27 +291,30 @@ app.get('/', (req, res) => {
                 flex-direction: column;
                 color: var(--text-color);
                 transition: all 0.3s ease;
+                line-height: 1.6;
             }
 
             .container {
                 max-width: 1000px;
                 margin: 20px auto;
                 background: var(--container-bg);
-                border-radius: 10px;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                border-radius: 15px;
+                box-shadow: 0 2px 15px rgba(0,0,0,0.1);
                 height: calc(100vh - 40px);
                 display: flex;
                 flex-direction: column;
+                overflow: hidden;
             }
 
             .header {
                 padding: 20px;
                 background: var(--header-bg);
                 color: var(--header-color);
-                border-radius: 10px 10px 0 0;
+                border-radius: 15px 15px 0 0;
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.1);
             }
 
             .header-controls {
@@ -278,20 +323,30 @@ app.get('/', (req, res) => {
                 gap: 15px;
             }
 
+            #status {
+                padding: 5px 10px;
+                border-radius: 15px;
+                background: rgba(255,255,255,0.2);
+                font-size: 14px;
+            }
+
             .theme-toggle {
                 background: none;
                 border: none;
                 color: var(--header-color);
                 cursor: pointer;
-                padding: 5px;
+                padding: 8px 12px;
+                border-radius: 20px;
                 display: flex;
                 align-items: center;
+                gap: 8px;
                 font-size: 14px;
-                gap: 5px;
+                transition: all 0.3s ease;
+                background: rgba(255,255,255,0.1);
             }
 
             .theme-toggle:hover {
-                opacity: 0.8;
+                background: rgba(255,255,255,0.2);
             }
 
             .header h1 {
@@ -304,34 +359,44 @@ app.get('/', (req, res) => {
                 padding: 20px;
                 overflow-y: auto;
                 background: var(--bg-color);
+                display: flex;
+                flex-direction: column;
+                gap: 15px;
             }
 
             .message {
-                margin-bottom: 15px;
-                max-width: 80%;
+                max-width: 85%;
                 display: flex;
                 flex-direction: column;
+                gap: 5px;
+                animation: fadeIn 0.3s ease;
+            }
+
+            @keyframes fadeIn {
+                from { opacity: 0; transform: translateY(10px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+
+            .user-message {
+                align-self: flex-end;
+            }
+
+            .bot-message {
+                align-self: flex-start;
             }
 
             .message-content {
                 padding: 12px 16px;
                 border-radius: 15px;
                 font-size: 15px;
-                line-height: 1.4;
-            }
-
-            .user-message {
-                margin-left: auto;
+                line-height: 1.5;
+                white-space: pre-wrap;
             }
 
             .user-message .message-content {
                 background: var(--message-user-bg);
                 color: var(--message-user-color);
                 border-bottom-right-radius: 5px;
-            }
-
-            .bot-message {
-                margin-right: auto;
             }
 
             .bot-message .message-content {
@@ -343,17 +408,22 @@ app.get('/', (req, res) => {
             .message-info {
                 font-size: 12px;
                 color: var(--secondary-text);
-                margin-top: 5px;
                 display: flex;
                 align-items: center;
-                gap: 5px;
+                gap: 8px;
+                padding: 0 5px;
+            }
+
+            .user-message .message-info {
+                justify-content: flex-end;
             }
 
             .source-indicator {
-                padding: 2px 6px;
-                border-radius: 10px;
+                padding: 3px 8px;
+                border-radius: 12px;
                 font-size: 11px;
                 font-weight: 500;
+                letter-spacing: 0.3px;
             }
 
             .source-intent {
@@ -366,9 +436,26 @@ app.get('/', (req, res) => {
                 color: #7b1fa2;
             }
 
-            .user-message .message-info {
-                text-align: right;
-                justify-content: flex-end;
+            [data-theme="dark"] .source-intent {
+                background: #1565c0;
+                color: #e3f2fd;
+            }
+
+            [data-theme="dark"] .source-gemini {
+                background: #6a1b9a;
+                color: #f3e5f5;
+            }
+
+            .typing-indicator {
+                display: none;
+                padding: 12px 16px;
+                background: var(--typing-bg);
+                border-radius: 15px;
+                color: var(--text-color);
+                font-size: 14px;
+                width: fit-content;
+                margin-bottom: 10px;
+                animation: fadeIn 0.3s ease;
             }
 
             #input-container {
@@ -381,18 +468,19 @@ app.get('/', (req, res) => {
 
             #message-input {
                 flex: 1;
-                padding: 12px;
-                border: 1px solid var(--input-border);
+                padding: 12px 20px;
+                border: 2px solid var(--input-border);
                 border-radius: 25px;
                 font-size: 15px;
                 outline: none;
-                transition: border-color 0.3s;
+                transition: all 0.3s ease;
                 background: var(--container-bg);
                 color: var(--text-color);
             }
 
             #message-input:focus {
                 border-color: var(--primary-color);
+                box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
             }
 
             button {
@@ -403,22 +491,20 @@ app.get('/', (req, res) => {
                 border-radius: 25px;
                 cursor: pointer;
                 font-size: 15px;
-                transition: background 0.3s;
+                font-weight: 500;
+                transition: all 0.3s ease;
+                display: flex;
+                align-items: center;
+                gap: 8px;
             }
 
             button:hover {
                 background: var(--primary-dark);
+                transform: translateY(-1px);
             }
 
-            .typing-indicator {
-                display: none;
-                padding: 12px 16px;
-                background: var(--typing-bg);
-                border-radius: 15px;
-                color: var(--text-color);
-                font-size: 14px;
-                margin-bottom: 15px;
-                width: fit-content;
+            button:active {
+                transform: translateY(0);
             }
 
             @media (max-width: 768px) {
@@ -435,6 +521,14 @@ app.get('/', (req, res) => {
                 .message {
                     max-width: 90%;
                 }
+
+                #message-input {
+                    padding: 10px 16px;
+                }
+
+                button {
+                    padding: 10px 20px;
+                }
             }
 
             /* Custom Scrollbar */
@@ -442,17 +536,51 @@ app.get('/', (req, res) => {
                 width: 8px;
             }
 
-            ::-webkit-scrollbar-track {
-                background: var(--bg-color);
+            /* Status Indicator Styles */
+            #status {
+                padding: 5px 10px;
+                border-radius: 15px;
+                font-size: 14px;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                transition: all 0.3s ease;
             }
 
-            ::-webkit-scrollbar-thumb {
-                background: var(--primary-color);
-                border-radius: 4px;
+            #status::before {
+                content: '';
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                display: inline-block;
             }
 
-            ::-webkit-scrollbar-thumb:hover {
-                background: var(--primary-dark);
+            .status-online {
+                background: rgba(52, 199, 89, 0.2);
+                color: #34c759;
+            }
+
+            .status-online::before {
+                background: #34c759;
+                box-shadow: 0 0 0 2px rgba(52, 199, 89, 0.2);
+            }
+
+            .status-offline {
+                background: rgba(255, 69, 58, 0.2);
+                color: #ff453a;
+            }
+
+            .status-offline::before {
+                background: #ff453a;
+                box-shadow: 0 0 0 2px rgba(255, 69, 58, 0.2);
+            }
+
+            [data-theme="dark"] .status-online {
+                background: rgba(52, 199, 89, 0.15);
+            }
+
+            [data-theme="dark"] .status-offline {
+                background: rgba(255, 69, 58, 0.15);
             }
         </style>
     </head>
@@ -461,7 +589,7 @@ app.get('/', (req, res) => {
             <div class="header">
                 <h1>AI Chatbot with Gemini</h1>
                 <div class="header-controls">
-                    <span id="status">Online</span>
+                    <span id="status" class="status-offline">Offline</span>
                     <button class="theme-toggle" onclick="toggleTheme()">
                         <span id="theme-icon">🌙</span>
                         <span id="theme-text">Dark Mode</span>
@@ -473,14 +601,54 @@ app.get('/', (req, res) => {
             </div>
             <div id="input-container">
                 <input type="text" id="message-input" placeholder="Nhập tin nhắn của bạn...">
-                <button onclick="sendMessage()">Gửi</button>
+                <button onclick="sendMessage()">
+                    <span>Gửi</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                </button>
             </div>
         </div>
         <script>
             const chatContainer = document.getElementById('chat-container');
             const messageInput = document.getElementById('message-input');
             const typingIndicator = document.querySelector('.typing-indicator');
+            const statusIndicator = document.getElementById('status');
             const sessionId = Date.now().toString();
+
+            // Kiểm tra trạng thái kết nối
+            function checkConnectionStatus() {
+                fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ message: 'ping', sessionId: 'connection-test' })
+                })
+                .then(() => {
+                    statusIndicator.textContent = 'Online';
+                    statusIndicator.className = 'status-online';
+                })
+                .catch(() => {
+                    statusIndicator.textContent = 'Offline';
+                    statusIndicator.className = 'status-offline';
+                });
+            }
+
+            // Kiểm tra kết nối ban đầu và thiết lập interval
+            checkConnectionStatus();
+            setInterval(checkConnectionStatus, 30000); // Kiểm tra mỗi 30 giây
+
+            // Thêm event listener cho trạng thái online/offline
+            window.addEventListener('online', () => {
+                checkConnectionStatus();
+            });
+
+            window.addEventListener('offline', () => {
+                statusIndicator.textContent = 'Offline';
+                statusIndicator.className = 'status-offline';
+            });
 
             // Theme handling
             function toggleTheme() {
@@ -517,9 +685,38 @@ app.get('/', (req, res) => {
 
             function formatTime(timestamp) {
                 const date = new Date(timestamp);
-                return date.toLocaleTimeString('vi-VN', { 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
+                const now = new Date();
+                const diffMs = now - date;
+                const diffMins = Math.floor(diffMs / 60000);
+                const diffHours = Math.floor(diffMins / 60);
+                const diffDays = Math.floor(diffHours / 24);
+
+                if (diffMins < 1) {
+                    return 'Vừa xong';
+                } else if (diffMins < 60) {
+                    return \`\${diffMins} phút trước\`;
+                } else if (diffHours < 24) {
+                    return \`\${diffHours} giờ trước\`;
+                } else if (diffDays === 1) {
+                    return 'Hôm qua';
+                } else if (diffDays < 7) {
+                    return \`\${diffDays} ngày trước\`;
+                } else {
+                    return date.toLocaleDateString('vi-VN', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                }
+            }
+
+            function updateMessageTimes() {
+                const messageInfos = document.querySelectorAll('.message-info .time');
+                messageInfos.forEach(timeSpan => {
+                    const timestamp = timeSpan.getAttribute('data-timestamp');
+                    timeSpan.textContent = formatTime(timestamp);
                 });
             }
 
@@ -535,6 +732,8 @@ app.get('/', (req, res) => {
                 messageInfo.className = 'message-info';
                 
                 const timeSpan = document.createElement('span');
+                timeSpan.className = 'time';
+                timeSpan.setAttribute('data-timestamp', timestamp);
                 timeSpan.textContent = formatTime(timestamp);
                 messageInfo.appendChild(timeSpan);
 
@@ -641,6 +840,9 @@ app.get('/', (req, res) => {
                 addMessage(welcomeMessage, false, new Date().toISOString(), 'greeting', 1, false);
                 loadChatHistory();
             };
+
+            // Thêm interval để cập nhật thời gian
+            setInterval(updateMessageTimes, 60000); // Cập nhật mỗi phút
         </script>
     </body>
     </html>

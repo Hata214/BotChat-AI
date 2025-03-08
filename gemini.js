@@ -52,6 +52,19 @@ async function initializeGeminiChat() {
     }
 }
 
+// Hàm format response từ Gemini
+function formatGeminiResponse(text) {
+    // Loại bỏ các dấu * thừa
+    text = text.replace(/\*{2,}/g, '');
+    // Thêm xuống dòng cho các phần chính
+    text = text.replace(/:/g, ':\n');
+    // Chuẩn hóa khoảng trắng
+    text = text.replace(/\s+/g, ' ').trim();
+    // Thêm bullet points cho các mục
+    text = text.replace(/(\d+\.|•)/g, '\n•');
+    return text;
+}
+
 // Hàm gửi tin nhắn đến Gemini và nhận phản hồi
 async function getGeminiResponse(chat, message) {
     try {
@@ -61,7 +74,7 @@ async function getGeminiResponse(chat, message) {
             }
         ]);
         const response = await result.response;
-        return response.text();
+        return formatGeminiResponse(response.text());
     } catch (error) {
         console.error('Lỗi khi gọi Gemini API:', error);
         throw error;
